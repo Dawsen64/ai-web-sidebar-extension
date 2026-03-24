@@ -1,0 +1,43 @@
+{
+  "manifest_version": 3,
+  "name": "AI 官网侧边栏助手",
+  "version": "0.1.0",
+  "description": "在独立侧边栏窗口中使用 DeepSeek、ChatGPT 和 Gemini 官网对话，支持划词模板和一键发送。",
+  "permissions": [
+    "storage",
+    "contextMenus",
+    "scripting",
+    "tabs",
+    "windows",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "https://chat.deepseek.com/*",
+    "https://www.deepseek.com/*",
+    "https://chatgpt.com/*",
+    "https://chat.openai.com/*",
+    "https://gemini.google.com/*",
+    "https://*/*",
+    "http://*/*"
+  ],
+  "background": {
+    "service_worker": "src/background/service-worker.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "打开 AI 官网侧边栏助手"
+  },
+  "options_page": "src/options/options.html",
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*/*",
+        "http://*/*"
+      ],
+      "js": [
+        "src/content/content-script.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}

@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 官网侧边栏助手设置</title>
+    <link rel="stylesheet" href="./options.css">
+  </head>
+  <body>
+    <main class="page">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">AI 官网侧边栏助手</p>
+          <h1>设置</h1>
+          <p class="intro">使用 DeepSeek、ChatGPT 和 Gemini 官网网页，不走 API，支持划词模板和自动发送。</p>
+        </div>
+        <button id="saveButton" class="primary-button">保存设置</button>
+      </header>
+
+      <section class="card">
+        <h2>基础设置</h2>
+        <div class="grid">
+          <label class="field">
+            <span>默认 AI</span>
+            <select id="defaultProvider"></select>
+          </label>
+          <label class="field">
+            <span>侧边栏位置</span>
+            <select id="sidebarSide">
+              <option value="left">左侧</option>
+              <option value="right">右侧</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>侧边栏宽度</span>
+            <input id="sidebarWidth" type="number" min="360" max="900" step="10">
+          </label>
+          <label class="field">
+            <span>默认发送方式</span>
+            <select id="defaultSendMode">
+              <option value="auto_send">自动填入并自动发送</option>
+              <option value="fill_only">只自动填入，不自动发送</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="provider-panel">
+          <span class="provider-label">启用的 AI 官网</span>
+          <div class="checks provider-checks">
+            <label><input id="provider_deepseek" type="checkbox"> DeepSeek</label>
+            <label><input id="provider_chatgpt" type="checkbox"> ChatGPT</label>
+            <label><input id="provider_gemini" type="checkbox"> Gemini</label>
+          </div>
+        </div>
+
+        <div class="checks">
+          <label><input id="quickMenuEnabled" type="checkbox"> 启用划词悬浮快捷菜单</label>
+          <label><input id="showSelectionToolbar" type="checkbox"> 在网页中显示快捷操作浮条</label>
+          <label><input id="refocusSidebarWithOwner" type="checkbox"> 主窗口重新获得焦点时，让侧栏回到前面并重新贴边</label>
+          <label><input id="closeSidebarWithOwner" type="checkbox"> 关闭主窗口时自动关闭侧栏</label>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="section-head">
+          <div>
+            <h2>模板管理</h2>
+            <p>支持变量：<code>{text}</code>、<code>{pageUrl}</code>、<code>{pageTitle}</code></p>
+          </div>
+          <button id="addTemplateButton" class="secondary-button">新增模板</button>
+        </div>
+        <div id="templateList" class="template-list"></div>
+      </section>
+
+      <p id="status" class="status" hidden></p>
+    </main>
+
+    <template id="templateItemTemplate">
+      <article class="template-item">
+        <div class="template-row">
+          <label class="field">
+            <span>名称</span>
+            <input data-field="name" type="text">
+          </label>
+          <label class="field">
+            <span>目标 AI</span>
+            <select data-field="provider">
+              <option value="inherit_default">跟随默认 AI</option>
+              <option value="deepseek">DeepSeek</option>
+              <option value="chatgpt">ChatGPT</option>
+              <option value="gemini">Gemini</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>发送方式</span>
+            <select data-field="sendMode">
+              <option value="inherit_default">跟随默认设置</option>
+              <option value="auto_send">自动填入并自动发送</option>
+              <option value="fill_only">只自动填入，不自动发送</option>
+            </select>
+          </label>
+        </div>
+        <label class="field">
+          <span>提示词模板</span>
+          <textarea data-field="content" rows="6"></textarea>
+        </label>
+        <div class="template-actions">
+          <label><input data-field="enabled" type="checkbox"> 启用</label>
+          <label><input data-field="showInQuickMenu" type="checkbox"> 显示在悬浮快捷菜单</label>
+          <button type="button" data-action="delete" class="danger-button">删除模板</button>
+        </div>
+      </article>
+    </template>
+
+    <script type="module" src="./options.js"></script>
+  </body>
+  </html>
