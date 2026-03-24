@@ -1,12 +1,12 @@
 const frame = document.querySelector("#providerFrame");
 const providerSelect = document.querySelector("#providerSelect");
-const statusBar = document.querySelector(".status-bar");
-const statusBadge = document.querySelector("#statusBadge");
-const statusText = document.querySelector("#statusText");
+const providerSwitcher = document.querySelector(".provider-switcher");
+const dragHandle = document.querySelector(".drag-handle");
 const SIDEPANEL_COMMAND_KEY = "sidepanel_command";
 const SIDEPANEL_ACK_KEY = "sidepanel_ack";
 const SIDEPANEL_ACTIVE_PROVIDER_KEY = "sidepanel_active_provider";
 const SIDEPANEL_READY_KEY = "sidepanel_ready";
+const SWITCHER_POSITION_KEY = "sidepanel_switcher_position";
 const PROVIDER_URLS = {
   deepseek: "https://chat.deepseek.com/",
   chatgpt: "https://chatgpt.com/",
@@ -20,12 +20,14 @@ const PROVIDER_LABELS = {
 
 let currentProvider = "deepseek";
 let bridgeReady = false;
-let statusResetTimer = null;
 let lastHandledCommandId = null;
 let frameLoaded = false;
 let latestInjectionRequestId = null;
+let dragState = null;
 
 bootstrap();
+restoreSwitcherPosition();
+dragHandle.addEventListener("pointerdown", startDragging);
 
 providerSelect.addEventListener("change", async () => {
   await switchProvider(providerSelect.value, { persist: true, forceReload: false });
@@ -72,7 +74,7 @@ async function switchProvider(providerId, options = {}) {
   const targetUrl = PROVIDER_URLS[currentProvider];
   const currentSrc = frame.getAttribute("src") || "";
   if (!forceReload && currentSrc === targetUrl) {
-    setStatus("success", "已就绪", `${PROVIDER_LABELS[currentProvider]} 已就绪。`, { quiet: true });
+    hideStatus();
     return;
   }
 
@@ -130,7 +132,7 @@ async function injectPrompt(payload) {
       const result = event.data.result ?? { ok: false, error: "未知注入结果。" };
       if (result.ok) {
         setStatus("success", "已发送", result.message || `提示词已发送到 ${PROVIDER_LABELS[payload.providerId ?? currentProvider]}。`, {
-          autoQuiet: true
+          autoHide: true
         });
       } else {
         setStatus("error", "发送失败", result.error || result.message || `${PROVIDER_LABELS[payload.providerId ?? currentProvider]} 注入失败。`);
@@ -263,7 +265,7 @@ async function pingBridge() {
       window.removeEventListener("message", onMessage);
       bridgeReady = true;
       setStatus("success", "已连接", `${PROVIDER_LABELS[currentProvider]} 页面桥接脚本已就绪。`, {
-        autoQuiet: true
+        autoHide: true
       });
       console.log("[AI Sidebar][SidePanel] bridge 已就绪", requestId);
       resolve();
@@ -288,21 +290,80 @@ function handleFrameEvents(event) {
 }
 
 function setStatus(kind, badge, text, options = {}) {
-  const { quiet = false, autoQuiet = false } = options;
-  window.clearTimeout(statusResetTimer);
-  statusBadge.textContent = badge;
-  statusText.textContent = text;
-  statusBadge.className = `status-badge status-${kind}`;
-  statusBar.classList.toggle("is-quiet", quiet);
+  void kind;
+  void badge;
+  void text;
+  void options;
+}
 
-  if (autoQuiet) {
-    statusResetTimer = window.setTimeout(() => {
-      statusBadge.textContent = "已就绪";
-      statusBadge.className = "status-badge status-success";
-      statusText.textContent = "";
-      statusBar.classList.add("is-quiet");
-    }, 1600);
+function hideStatus() {
+  return;
+}
+
+function restoreSwitcherPosition() {
+  try {
+    const raw = window.localStorage.getItem(SWITCHER_POSITION_KEY);
+    if (!raw) {
+      return;
+    }
+    const position = JSON.parse(raw);
+    if (typeof position.left !== "number" || typeof position.top !== "number") {
+      return;
+    }
+    providerSwitcher.style.left = `${position.left}px`;
+    providerSwitcher.style.top = `${position.top}px`;
+  } catch (_error) {
+    // Ignore malformed persisted position.
   }
+}
+
+function startDragging(event) {
+  event.preventDefault();
+  const rect = providerSwitcher.getBoundingClientRect();
+  dragState = {
+    offsetX: event.clientX - rect.left,
+    offsetY: event.clientY - rect.top
+  };
+  providerSwitcher.classList.add("is-dragging");
+  document.body.classList.add("is-dragging");
+  dragHandle.setPointerCapture(event.pointerId);
+  window.addEventListener("pointermove", handleDragging);
+  window.addEventListener("pointerup", stopDragging);
+}
+
+function handleDragging(event) {
+  if (!dragState) {
+    return;
+  }
+
+  const maxLeft = Math.max(8, window.innerWidth - providerSwitcher.offsetWidth - 8);
+  const maxTop = Math.max(8, window.innerHeight - providerSwitcher.offsetHeight - 8);
+  const nextLeft = clamp(event.clientX - dragState.offsetX, 8, maxLeft);
+  const nextTop = clamp(event.clientY - dragState.offsetY, 8, maxTop);
+
+  providerSwitcher.style.left = `${nextLeft}px`;
+  providerSwitcher.style.top = `${nextTop}px`;
+}
+
+function stopDragging() {
+  if (!dragState) {
+    return;
+  }
+
+  dragState = null;
+  providerSwitcher.classList.remove("is-dragging");
+  document.body.classList.remove("is-dragging");
+  window.removeEventListener("pointermove", handleDragging);
+  window.removeEventListener("pointerup", stopDragging);
+
+  window.localStorage.setItem(SWITCHER_POSITION_KEY, JSON.stringify({
+    left: parseFloat(providerSwitcher.style.left) || providerSwitcher.offsetLeft,
+    top: parseFloat(providerSwitcher.style.top) || providerSwitcher.offsetTop
+  }));
+}
+
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
 }
 
 async function persistCurrentProvider(providerId) {

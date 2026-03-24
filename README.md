@@ -2,7 +2,7 @@
 
 一个基于 Chrome / Edge Manifest V3 的浏览器扩展。
 
-它通过“伪侧边栏窗口”的方式，在浏览器右侧或左侧常驻打开 `DeepSeek`、`ChatGPT`、`Gemini` 官网聊天页面，并支持网页划词、右键菜单、悬浮快捷菜单、自定义模板、自动填入与自动发送。
+它通过浏览器原生 `sidePanel` 打开 `DeepSeek`、`ChatGPT`、`Gemini` 官网聊天页面，并支持网页划词、右键菜单、悬浮快捷菜单、自定义模板、自动填入与自动发送。
 
 这个项目适合这样一类需求：
 - 希望直接使用 AI 官网网页
@@ -15,7 +15,7 @@
 如果你后面准备公开展示项目，建议补几张截图放到 `docs/` 或 `assets/` 目录：
 - 设置页
 - 网页划词后的悬浮快捷菜单
-- 侧栏窗口贴边效果
+- 浏览器原生 sidePanel 效果
 - DeepSeek / ChatGPT / Gemini 实际使用界面
 
 ## 当前状态
@@ -24,7 +24,7 @@
 - 核心功能已跑通
 - 适合本地加载和个人使用
 - 由于依赖官网页面结构，后续仍可能需要针对站点改版做兼容调整
-- 已包含一个 `原生 sidePanel 实验版`
+- 当前主线路线为 `原生 sidePanel`
 
 ## 功能特性
 
@@ -39,13 +39,8 @@
 - 支持每个模板单独配置：
   - 自动填入并自动发送
   - 只自动填入，不自动发送
-- 支持设置默认 AI、侧栏位置、侧栏宽度
-- 支持主窗口与侧栏联动：
-  - 主窗口重新获得焦点时，侧栏自动重新贴边
-  - 关闭主窗口时自动关闭侧栏
-- 支持切换侧栏实现方式：
-  - 窗口模拟侧栏（稳定）
-  - 原生 sidePanel 实验版（DeepSeek / ChatGPT / Gemini）
+- 支持设置默认 AI
+- 支持当前 sidePanel 站点作为“跟随默认 AI”模板的实际目标站点
 
 ## 支持的 AI
 
@@ -55,32 +50,31 @@
 
 ## 设计说明
 
-这个扩展不是使用浏览器原生 `sidePanel`，而是使用一个独立的 `popup` 窗口模拟侧边栏。
-
-这样做的原因是：
-- AI 官网通常不适合直接嵌入扩展页面
-- 登录态和 Cookie 在普通浏览器窗口里更稳定
-- 多个 AI 官网兼容性更好
+这个扩展当前主线路线是浏览器原生 `sidePanel`：
+- sidePanel 页面承载 AI 官网 iframe
+- 通过站点桥接脚本把模板 prompt 注入官网输入框
+- 复用你已经登录的官网账号和网页额度
 
 当前方案的取舍：
-- 优点：稳定、兼容 AI 官网、无需 API
-- 限制：本质上仍然是一个独立窗口，不是系统级“永远置顶”
+- 优点：更接近浏览器原生侧边栏体验、无需 API
+- 限制：依赖官网页面结构，且 sidePanel 打开受浏览器用户手势限制约束
 
 ## 工作原理
 
 扩展大致分成 4 部分：
 
 1. 后台服务
-负责窗口创建、侧栏贴边、右键菜单和消息调度。
+负责 sidePanel 打开、右键菜单和消息调度。
 
 2. 网页内容脚本
 负责监听网页选区并显示悬浮快捷菜单。
 
 3. 设置页
-负责模板管理、默认 AI、发送方式和窗口联动选项。
+负责模板管理、默认 AI 和发送方式配置。
 
-4. AI 站点适配层
-负责识别 DeepSeek / ChatGPT / Gemini 官网页面中的输入框和发送按钮，并执行自动填入或自动发送。
+4. sidePanel 与 AI 站点适配层
+负责 sidePanel iframe、bridge 通信，以及 DeepSeek / ChatGPT / Gemini 官网页面中的输入框和发送按钮适配。
+sidePanel 内还提供了一个可拖动的悬浮站点切换器。
 
 ## 项目结构
 
@@ -100,9 +94,11 @@ ai-web-sidebar-extension/
 
 主要文件：
 - `manifest.json`：扩展声明
-- `src/background/service-worker.js`：后台逻辑、窗口管理、菜单和消息调度
-- `src/background/providers.js`：DeepSeek / ChatGPT / Gemini 注入逻辑
+- `src/background/service-worker.js`：后台逻辑、菜单和 sidePanel 消息调度
+- `src/content/provider-bridge.js`：sidePanel 内官网页面桥接与注入逻辑
 - `src/content/content-script.js`：划词悬浮快捷菜单
+- `src/sidepanel/sidepanel.html`：原生 sidePanel 页面
+- `src/sidepanel/sidepanel.js`：sidePanel provider 切换和注入状态机
 - `src/options/options.html`：中文设置页
 - `src/options/options.js`：设置页保存逻辑
 - `src/shared/defaults.js`：默认配置和默认模板
@@ -132,7 +128,8 @@ ai-web-sidebar-extension/
 
 - 后台脚本：扩展管理页中打开 Service Worker 检查视图
 - 网页脚本：在普通网页中打开开发者工具
-- AI 官网页面：在侧栏窗口中打开开发者工具查看输入框或发送按钮问题
+- sidePanel 页面：在扩展管理页里打开 sidePanel 检查视图
+- AI 官网页面：在 sidePanel iframe 对应页面里查看输入框或发送按钮问题
 
 ## 使用说明
 
@@ -140,12 +137,14 @@ ai-web-sidebar-extension/
 
 1. 先分别登录你要使用的 AI 官网
 2. 打开扩展设置页
-3. 配置默认 AI、发送方式、侧栏位置和模板
+3. 配置默认 AI、发送方式和模板
 
 ### 2. 打开侧栏
 
 - 点击浏览器工具栏中的扩展图标
-- 如果设置为原生 sidePanel 实验版，DeepSeek / ChatGPT / Gemini 会优先在浏览器原生侧栏中打开
+- 当前版本只使用浏览器原生 sidePanel
+- 第一次使用时，建议先点击扩展图标打开 sidePanel，再在普通网页中划词触发模板
+- sidePanel 内置一个半透明的悬浮站点切换器，鼠标移上去会变清晰，也可以拖动位置
 
 ### 3. 划词触发
 
@@ -165,11 +164,11 @@ ai-web-sidebar-extension/
 
 ### 1. 为什么不用浏览器原生 sidePanel？
 
-因为这个项目的核心目标是直接使用 AI 官网网页。很多官网页面不适合直接嵌入扩展页面，登录态和交互行为在独立窗口里更稳定。
+当前版本已经使用浏览器原生 sidePanel。为了让 AI 官网页面能在 sidePanel 中工作，扩展内部做了 iframe 与站点桥接层。
 
-### 2. 为什么不能做到系统级始终置顶？
+### 2. 为什么有时需要先手动打开 sidePanel？
 
-因为浏览器扩展对窗口的控制能力有限。当前实现已经尽量把侧栏做成“附属侧栏”的体验，但它本质上仍然是一个浏览器窗口。
+因为 `chrome.sidePanel.open()` 受到浏览器的用户手势限制。最稳的用法是先点击扩展图标打开 sidePanel，再从网页划词触发模板。
 
 ### 3. 如果官网改版后自动填入失效怎么办？
 
@@ -178,9 +177,8 @@ ai-web-sidebar-extension/
 ## 当前已知限制
 
 - 由于依赖官网页面结构，官网 DOM 改版后，自动填入或自动发送可能需要重新适配
-- 不能保证系统级别的“始终置顶”
-- 不同浏览器和不同窗口边框样式下，侧栏贴边视觉可能略有差异
-- 原生 sidePanel 实验版目前仍属于实验功能，DeepSeek、ChatGPT、Gemini 都可能因官网改版而需要重新适配
+- `chrome.sidePanel.open()` 受浏览器用户手势限制，模板触发时如果 sidePanel 尚未打开，需要先手动打开
+- DeepSeek、ChatGPT、Gemini 都可能因官网改版而需要重新适配
 
 ## 安全与隐私
 
@@ -203,7 +201,7 @@ ai-web-sidebar-extension/
 - 增加模板导入导出
 - 增加快捷键触发
 - 提高官网 DOM 变更时的兼容性
-- 增加更丰富的窗口联动行为
+- 打磨 sidePanel 内悬浮控件和交互细节
 
 ## 设计文档
 

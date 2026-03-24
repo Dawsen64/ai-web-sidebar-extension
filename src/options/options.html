@@ -25,24 +25,6 @@
             <select id="defaultProvider"></select>
           </label>
           <label class="field">
-            <span>侧栏实现方式</span>
-            <select id="sidebarImplementation">
-              <option value="popup">窗口模拟侧栏（稳定）</option>
-              <option value="native_sidepanel">原生 sidePanel 实验版（仅 DeepSeek）</option>
-            </select>
-          </label>
-          <label class="field">
-            <span>侧边栏位置</span>
-            <select id="sidebarSide">
-              <option value="left">左侧</option>
-              <option value="right">右侧</option>
-            </select>
-          </label>
-          <label class="field">
-            <span>侧边栏宽度</span>
-            <input id="sidebarWidth" type="number" min="360" max="900" step="10">
-          </label>
-          <label class="field">
             <span>默认发送方式</span>
             <select id="defaultSendMode">
               <option value="auto_send">自动填入并自动发送</option>
@@ -63,8 +45,6 @@
         <div class="checks">
           <label><input id="quickMenuEnabled" type="checkbox"> 启用划词悬浮快捷菜单</label>
           <label><input id="showSelectionToolbar" type="checkbox"> 在网页中显示快捷操作浮条</label>
-          <label><input id="refocusSidebarWithOwner" type="checkbox"> 主窗口重新获得焦点时，让侧栏回到前面并重新贴边</label>
-          <label><input id="closeSidebarWithOwner" type="checkbox"> 关闭主窗口时自动关闭侧栏</label>
         </div>
       </section>
 
@@ -80,7 +60,7 @@
       </section>
 
       <p id="status" class="status" hidden></p>
-      <p class="status-note">实验版说明：原生 sidePanel 当前只对 DeepSeek 生效，ChatGPT 和 Gemini 仍然会回退到窗口模拟侧栏。</p>
+      <p class="status-note">当前版本仅使用浏览器原生 sidePanel。请先点击扩展图标打开侧栏，再在网页中划词触发模板。</p>
     </main>
 
     <template id="templateItemTemplate">

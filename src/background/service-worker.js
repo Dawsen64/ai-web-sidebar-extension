@@ -1,8 +1,6 @@
-import { getProvider, findProviderTab, injectPromptToProvider } from "./providers.js";
-import { ensureDefaults, getRuntimeState, getSettings, getTemplates, saveRuntimeState, saveSettings, saveTemplates } from "./storage.js";
+import { ensureDefaults, getSettings, getTemplates, saveSettings, saveTemplates } from "./storage.js";
 import { renderTemplate } from "../shared/defaults.js";
 
-const WINDOW_JOIN_OVERLAP = 10;
 const SIDEPANEL_SUPPORTED_PROVIDERS = new Set(["deepseek", "chatgpt", "gemini"]);
 const SIDEPANEL_COMMAND_KEY = "sidepanel_command";
 const SIDEPANEL_ACK_KEY = "sidepanel_ack";
@@ -22,9 +20,7 @@ chrome.runtime.onStartup.addListener(async () => {
 chrome.action.onClicked.addListener(async () => {
   const settings = await getSettings();
   const currentWindow = await chrome.windows.getCurrent();
-  const providerId = settings.sidebarImplementation === "native_sidepanel"
-    ? await resolveDefaultActionProvider(settings)
-    : settings.defaultProvider;
+  const providerId = await resolveDefaultActionProvider(settings);
   await openSidebarForProvider(providerId, currentWindow.id);
 });
 
@@ -101,70 +97,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return false;
 });
 
-chrome.windows.onRemoved.addListener(async (windowId) => {
-  const settings = await getSettings();
-  const runtime = await getRuntimeState();
-
-  if (
-    settings.closeSidebarWithOwner &&
-    runtime.ownerWindowId === windowId &&
-    runtime.sidebarWindowId &&
-    runtime.sidebarWindowId !== windowId
-  ) {
-    try {
-      await chrome.windows.remove(runtime.sidebarWindowId);
-    } catch (_error) {
-      // Ignore failures if the sidebar window is already gone.
-    }
-
-    await saveRuntimeState({
-      ...runtime,
-      ownerWindowId: undefined,
-      sidebarWindowId: undefined,
-      ownerOriginalBounds: undefined
-    });
-    return;
-  }
-
-  if (runtime.sidebarWindowId !== windowId) {
-    return;
-  }
-
-  await restoreOwnerWindowBounds(runtime);
-  await saveRuntimeState({
-    ...runtime,
-    ownerWindowId: undefined,
-    sidebarWindowId: undefined,
-    ownerOriginalBounds: undefined
-  });
-});
-
-chrome.windows.onFocusChanged.addListener(async (windowId) => {
-  if (windowId === chrome.windows.WINDOW_ID_NONE) {
-    return;
-  }
-
-  const [settings, runtime] = await Promise.all([getSettings(), getRuntimeState()]);
-  if (!settings.refocusSidebarWithOwner) {
-    return;
-  }
-
-  if (!runtime.ownerWindowId || !runtime.sidebarWindowId) {
-    return;
-  }
-
-  if (windowId !== runtime.ownerWindowId) {
-    return;
-  }
-
-  try {
-    await chrome.windows.get(runtime.sidebarWindowId);
-    await dockSidebarToOwner(runtime.sidebarWindowId, runtime.ownerWindowId, settings, runtime);
-  } catch (_error) {
-    // Ignore stale runtime state if one of the windows no longer exists.
-  }
-});
-
 async function rebuildContextMenus() {
   await chrome.contextMenus.removeAll();
   await chrome.contextMenus.create({
@@ -219,8 +151,8 @@ async function dispatchTemplateAction(payload) {
     return { ok: false, error: "没有找到对应的模板。" };
   }
 
-  const useSidePanelActiveProvider = settings.sidebarImplementation === "native_sidepanel" && template.provider === "inherit_default";
-  const providerId = useSidePanelActiveProvider ? settings.defaultProvider : await resolveTargetProvider(template, settings);
+  const useSidePanelActiveProvider = template.provider === "inherit_default";
+  const providerId = useSidePanelActiveProvider ? settings.defaultProvider : await resolveTargetProvider(template);
   if (!settings.enabledProviders.includes(providerId)) {
     return { ok: false, error: "这个模板绑定的 AI 目前未启用。" };
   }
@@ -237,17 +169,15 @@ async function dispatchTemplateAction(payload) {
   return { ok: true, result };
 }
 
-async function resolveTargetProvider(template, settings) {
+async function resolveTargetProvider(template) {
   if (template.provider !== "inherit_default") {
     return template.provider;
   }
 
-  if (settings.sidebarImplementation === "native_sidepanel") {
-    const data = await chrome.storage.local.get(SIDEPANEL_ACTIVE_PROVIDER_KEY);
-    const activeProvider = data[SIDEPANEL_ACTIVE_PROVIDER_KEY];
-    if (activeProvider && SIDEPANEL_SUPPORTED_PROVIDERS.has(activeProvider)) {
-      return activeProvider;
-    }
+  const data = await chrome.storage.local.get(SIDEPANEL_ACTIVE_PROVIDER_KEY);
+  const activeProvider = data[SIDEPANEL_ACTIVE_PROVIDER_KEY];
+  if (activeProvider && SIDEPANEL_SUPPORTED_PROVIDERS.has(activeProvider)) {
+    return activeProvider;
   }
 
   return settings.defaultProvider;
@@ -277,71 +207,34 @@ async function setActiveProvider(providerId) {
 }
 
 async function sendPromptToProvider({ providerId, prompt, sendMode, ownerWindowId, useSidePanelActiveProvider = false }) {
-  const settings = await getSettings();
-  if ((useSidePanelActiveProvider || shouldUseNativeSidePanel(settings, providerId)) && ownerWindowId) {
-    return sendPromptToNativeSidePanel({ providerId, prompt, sendMode, ownerWindowId, useSidePanelActiveProvider });
-  }
-
-  const runtime = await getRuntimeState();
-  const windowId = await openOrFocusSidebar(providerId, ownerWindowId ?? runtime.ownerWindowId);
-  let tab = await findProviderTab(providerId, windowId);
-
-  if (!tab) {
-    const provider = getProvider(providerId);
-    const createdTab = await chrome.tabs.create({
-      windowId,
-      url: provider.url,
-      active: true
-    });
-    tab = createdTab;
-  } else {
-    await chrome.tabs.update(tab.id, { active: true });
-  }
-
-  await chrome.windows.update(windowId, { focused: true });
-  await waitForTabReady(tab.id);
-
-  let result;
-  try {
-    result = await injectPromptToProvider(tab.id, providerId, prompt, sendMode);
-  } catch (error) {
-    result = {
+  if (!ownerWindowId) {
+    return {
       ok: false,
       mode: "fallback",
-      message: `注入失败：${error.message}`
+      message: "没有找到当前浏览器窗口，无法发送到 sidePanel。"
     };
-    console.error("注入提示词失败", { providerId, error });
   }
-  await saveRuntimeState({
-    ...runtime,
-    sidebarWindowId: windowId,
-    ownerWindowId: ownerWindowId ?? runtime.ownerWindowId,
-    activeProvider: providerId,
-    sidebarWidth: settings.sidebarWidth,
-    sidebarSide: settings.sidebarSide
-  });
-  return result;
+
+  return sendPromptToNativeSidePanel({ providerId, prompt, sendMode, ownerWindowId, useSidePanelActiveProvider });
 }
 
 async function openSidebarForProvider(providerId, ownerWindowId) {
-  const settings = await getSettings();
-  if (shouldUseNativeSidePanel(settings, providerId) && ownerWindowId) {
-    chrome.sidePanel.open({ windowId: ownerWindowId }).catch((error) => {
-      console.warn("[AI Sidebar][SW] 打开原生 sidePanel 失败", error);
-    });
-    await postSidePanelCommand({
-      kind: "switch_provider",
-      providerId
-    });
-    return { mode: "native_sidepanel" };
+  if (!ownerWindowId) {
+    return {
+      ok: false,
+      mode: "native_sidepanel",
+      message: "没有找到当前浏览器窗口，无法打开 sidePanel。"
+    };
   }
 
-  const windowId = await openOrFocusSidebar(providerId, ownerWindowId);
-  return { mode: "popup", windowId };
-}
-
-function shouldUseNativeSidePanel(settings, providerId) {
-  return settings.sidebarImplementation === "native_sidepanel" && SIDEPANEL_SUPPORTED_PROVIDERS.has(providerId);
+  chrome.sidePanel.open({ windowId: ownerWindowId }).catch((error) => {
+    console.warn("[AI Sidebar][SW] 打开原生 sidePanel 失败", error);
+  });
+  await postSidePanelCommand({
+    kind: "switch_provider",
+    providerId
+  });
+  return { mode: "native_sidepanel" };
 }
 
 async function sendPromptToNativeSidePanel({ providerId, prompt, sendMode, ownerWindowId, useSidePanelActiveProvider = false }) {
@@ -403,210 +296,4 @@ async function postSidePanelCommandAndWaitForAck(command, timeoutMs = 8000) {
   }
 
   throw new Error("等待 sidePanel 响应超时。");
-}
-
-async function openOrFocusSidebar(providerId, ownerWindowId) {
-  const settings = await getSettings();
-  const runtime = await getRuntimeState();
-  const existingWindowId = runtime.sidebarWindowId;
-  const targetOwnerWindowId = ownerWindowId ?? runtime.ownerWindowId;
-
-  if (existingWindowId) {
-    try {
-      await chrome.windows.get(existingWindowId);
-      if (targetOwnerWindowId) {
-        await dockSidebarToOwner(existingWindowId, targetOwnerWindowId, settings, runtime);
-      }
-      await chrome.windows.update(existingWindowId, { focused: true });
-      return existingWindowId;
-    } catch (_error) {
-      // Ignore stale window id.
-    }
-  }
-
-  const currentWindow = targetOwnerWindowId
-    ? await chrome.windows.get(targetOwnerWindowId)
-    : null;
-  const width = Math.max(360, Math.min(settings.sidebarWidth, 900));
-  const provider = getProvider(providerId);
-  const dockResult = currentWindow
-    ? await prepareDockedBounds(currentWindow, width, settings.sidebarSide)
-    : {
-        ownerOriginalBounds: undefined,
-        sidebarBounds: {
-          left: undefined,
-          top: undefined,
-          height: undefined
-        }
-      };
-
-  const createdWindow = await chrome.windows.create({
-    url: provider.url,
-    type: "popup",
-    focused: true,
-    width,
-    ...(dockResult.sidebarBounds.height ? { height: dockResult.sidebarBounds.height } : {}),
-    ...(typeof dockResult.sidebarBounds.left === "number" ? { left: dockResult.sidebarBounds.left } : {}),
-    ...(typeof dockResult.sidebarBounds.top === "number" ? { top: dockResult.sidebarBounds.top } : {})
-  });
-
-  await saveRuntimeState({
-    ...runtime,
-    sidebarWindowId: createdWindow.id,
-    ownerWindowId: currentWindow?.id ?? runtime.ownerWindowId,
-    activeProvider: providerId,
-    sidebarWidth: width,
-    sidebarSide: settings.sidebarSide,
-    ownerOriginalBounds: dockResult.ownerOriginalBounds
-  });
-
-  return createdWindow.id;
-}
-
-async function prepareDockedBounds(ownerWindow, sidebarWidth, side, runtime) {
-  const normalizedOwnerWindow = await ensureResizableWindow(ownerWindow);
-  const ownerOriginalBounds = {
-    left: ownerWindow.left ?? 0,
-    top: ownerWindow.top ?? 0,
-    width: ownerWindow.width ?? 1440,
-    height: ownerWindow.height ?? 900,
-    state: ownerWindow.state ?? "normal"
-  };
-
-  const ownerLeft = ownerOriginalBounds.left ?? normalizedOwnerWindow.left ?? 0;
-  const ownerTop = ownerOriginalBounds.top ?? normalizedOwnerWindow.top ?? 0;
-  const ownerWidth = ownerOriginalBounds.width ?? normalizedOwnerWindow.width ?? 1440;
-  const ownerHeight = ownerOriginalBounds.height ?? normalizedOwnerWindow.height ?? 900;
-  const resizedOwnerWidth = Math.max(720, ownerWidth - sidebarWidth);
-
-  if (side === "left") {
-    await chrome.windows.update(normalizedOwnerWindow.id, {
-      left: ownerLeft + sidebarWidth,
-      top: ownerTop,
-      width: resizedOwnerWidth,
-      height: ownerHeight
-    });
-    return {
-      ownerOriginalBounds,
-      sidebarBounds: {
-        left: ownerLeft,
-        top: ownerTop,
-        height: ownerHeight
-      }
-    };
-  }
-
-  await chrome.windows.update(normalizedOwnerWindow.id, {
-    left: ownerLeft,
-    top: ownerTop,
-    width: resizedOwnerWidth,
-    height: ownerHeight
-  });
-
-  return {
-    ownerOriginalBounds,
-    sidebarBounds: {
-      left: ownerLeft + resizedOwnerWidth - WINDOW_JOIN_OVERLAP,
-      top: ownerTop,
-      height: ownerHeight
-    }
-  };
-}
-
-async function dockSidebarToOwner(sidebarWindowId, ownerWindowId, settings, runtime) {
-  const originalOwnerWindow = await chrome.windows.get(ownerWindowId);
-  const ownerWindow = await ensureResizableWindow(originalOwnerWindow);
-  const width = Math.max(360, Math.min(settings.sidebarWidth, 900));
-  const side = settings.sidebarSide;
-
-  const baseBounds = runtime.ownerOriginalBounds ?? {
-    left: originalOwnerWindow.left ?? ownerWindow.left ?? 0,
-    top: originalOwnerWindow.top ?? ownerWindow.top ?? 0,
-    width: originalOwnerWindow.width ?? ownerWindow.width ?? 1440,
-    height: originalOwnerWindow.height ?? ownerWindow.height ?? 900,
-    state: originalOwnerWindow.state ?? "normal"
-  };
-  const ownerLeft = baseBounds.left ?? ownerWindow.left ?? 0;
-  const ownerTop = baseBounds.top ?? ownerWindow.top ?? 0;
-  const ownerWidth = baseBounds.width ?? ownerWindow.width ?? 1440;
-  const ownerHeight = baseBounds.height ?? ownerWindow.height ?? 900;
-  const resizedOwnerWidth = Math.max(720, ownerWidth - width);
-
-  if (side === "left") {
-    await chrome.windows.update(ownerWindowId, {
-      left: ownerLeft + width,
-      top: ownerTop,
-      width: resizedOwnerWidth,
-      height: ownerHeight
-    });
-    await chrome.windows.update(sidebarWindowId, {
-      left: ownerLeft,
-      top: ownerTop,
-      width,
-      height: ownerHeight
-    });
-  } else {
-    await chrome.windows.update(ownerWindowId, {
-      left: ownerLeft,
-      top: ownerTop,
-      width: resizedOwnerWidth,
-      height: ownerHeight
-    });
-    await chrome.windows.update(sidebarWindowId, {
-      left: ownerLeft + resizedOwnerWidth - WINDOW_JOIN_OVERLAP,
-      top: ownerTop,
-      width,
-      height: ownerHeight
-    });
-  }
-
-  await saveRuntimeState({
-    ...runtime,
-    ownerWindowId,
-    ownerOriginalBounds: baseBounds
-  });
-}
-
-async function restoreOwnerWindowBounds(runtime) {
-  if (!runtime.ownerWindowId || !runtime.ownerOriginalBounds) {
-    return;
-  }
-
-  try {
-    const { state, ...bounds } = runtime.ownerOriginalBounds;
-    await chrome.windows.update(runtime.ownerWindowId, {
-      state: "normal",
-      ...bounds
-    });
-    if (state && state !== "normal") {
-      await chrome.windows.update(runtime.ownerWindowId, { state });
-    }
-  } catch (_error) {
-    // Ignore failures if the original owner window no longer exists.
-  }
-}
-
-async function ensureResizableWindow(ownerWindow) {
-  if (!ownerWindow?.id) {
-    return ownerWindow;
-  }
-
-  if (ownerWindow.state && ownerWindow.state !== "normal") {
-    await chrome.windows.update(ownerWindow.id, { state: "normal" });
-    return chrome.windows.get(ownerWindow.id);
-  }
-
-  return ownerWindow;
-}
-
-async function waitForTabReady(tabId, timeoutMs = 15000) {
-  const startedAt = Date.now();
-
-  while (Date.now() - startedAt < timeoutMs) {
-    const tab = await chrome.tabs.get(tabId);
-    if (tab.status === "complete") {
-      return;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 400));
-  }
 }

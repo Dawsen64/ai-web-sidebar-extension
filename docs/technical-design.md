@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-This project is a Chrome/Edge Manifest V3 extension that recreates the workflow of a side assistant similar to "DeepSeek Sidebar", but does not use API calls. Instead, it opens the official AI websites in a narrow dedicated browser window that behaves like a pseudo-sidebar.
+This project is a Chrome/Edge Manifest V3 extension that recreates the workflow of a side assistant similar to "DeepSeek Sidebar", but does not use API calls. Instead, it loads the official AI websites inside the browser native `sidePanel` and reuses the user's existing website login state.
 
 The first release targets:
 - DeepSeek
@@ -26,17 +26,17 @@ Non-goals for MVP:
 
 ### 2.1 Sidebar Form
 
-The extension will use a pseudo-sidebar window instead of Chrome's native `sidePanel` API.
+The extension will use Chrome's native `sidePanel` API as the only sidebar form.
 
 Reason:
-- Official AI websites commonly block iframe embedding or behave poorly in embedded contexts
-- Login state and cookie behavior are more reliable in a normal browser window
-- A narrow dedicated window more closely preserves official website behavior
+- The final product goal is a true browser-native sidebar experience
+- The current sidePanel bridge approach already works across DeepSeek, ChatGPT, and Gemini
+- Maintaining both popup and sidePanel implementations increases complexity without user value
 
 User-visible behavior:
-- Open a narrow window docked visually on the left or right side
-- Remember width, side, last active AI provider, and other preferences
-- Keep the window alive while the user switches normal browsing tabs
+- Open the browser native sidePanel from the extension action button
+- Keep one active provider inside the sidePanel
+- Reuse the current sidePanel provider when templates are configured to follow the default AI
 
 ### 2.2 AI Access Model
 
@@ -54,7 +54,6 @@ All usage limits, authentication, and chat history remain managed by the provide
 
 Approved defaults:
 - Default provider: `DeepSeek`
-- Default side: `right`
 - Default send mode: `auto-fill and auto-send`
 - Default quick actions: `Translate`, `Explain`, `Summarize`, `Ask`
 
@@ -68,7 +67,7 @@ MVP providers:
 - Gemini
 
 Each provider must support:
-- open provider in pseudo-sidebar window
+- open provider in native sidePanel
 - inject prompt into input area
 - optionally send automatically
 
@@ -122,23 +121,19 @@ The extension must persist:
 - extension settings
 - template list
 - last active provider
-- pseudo-sidebar width
-- pseudo-sidebar side
-- last known pseudo-sidebar window id if available
 
 Storage strategy:
 - `chrome.storage.sync` for small user settings and templates
-- `chrome.storage.local` for volatile runtime state such as window id
+- `chrome.storage.local` for volatile runtime state such as sidePanel command/ack and active provider
 
 ## 4. User Flows
 
 ### 4.1 Open Sidebar
 
 1. User clicks extension action button
-2. Background service worker checks whether sidebar window already exists
-3. If yes, focus that window
-4. If no, create a new popup window with a provider launcher page or direct provider URL
-5. Restore saved width, position, and provider
+2. Background service worker opens browser native sidePanel
+3. sidePanel switches to the target provider
+4. sidePanel restores the last active provider if no explicit target is given
 
 ### 4.2 Send Selected Text via Context Menu
 
@@ -151,8 +146,8 @@ Storage strategy:
 - template id
 - target provider
 4. Extension composes prompt from template
-5. Sidebar window is opened or focused
-6. Provider adapter injects the prompt
+5. sidePanel must already be open or be opened by user gesture
+6. Provider bridge injects the prompt into the current provider page
 7. Adapter either sends automatically or leaves text filled
 
 ### 4.3 Send Selected Text via Floating Toolbar
@@ -178,9 +173,9 @@ Storage strategy:
 
 Responsibilities:
 - create and update context menus
-- manage pseudo-sidebar window lifecycle
+- manage sidePanel command dispatch
 - route action requests from content scripts and options page
-- maintain runtime state
+- maintain sidePanel runtime state
 - coordinate provider prompt injection
 
 ### Content Script
@@ -198,12 +193,12 @@ Responsibilities:
 - manage templates
 - configure providers and behavior
 
-### Sidebar Launcher Page
+### SidePanel Page
 
 Responsibilities:
-- lightweight extension-owned page loaded in the pseudo-sidebar window before or between provider navigations
-- allow provider switching if direct provider navigation is not active
-- show fallback instructions when automatic injection fails
+- host the provider iframe
+- allow provider switching
+- show sidePanel status and fallback instructions when automatic injection fails
 
 ### Provider Adapters
 
@@ -304,8 +299,6 @@ Suggested settings shape:
 interface ExtensionSettings {
   defaultProvider: "deepseek" | "chatgpt" | "gemini";
   enabledProviders: Array<"deepseek" | "chatgpt" | "gemini">;
-  sidebarSide: "left" | "right";
-  sidebarWidth: number;
   quickMenuEnabled: boolean;
   defaultSendMode: "auto_send" | "fill_only";
 }
@@ -433,7 +426,7 @@ Mitigation:
 ## 11. MVP Milestones
 
 ### Milestone 1: Technical Validation
-- validate official websites in narrow popup window
+- validate official websites in native sidePanel iframe
 - validate prompt injection on all three providers
 - validate auto-send feasibility
 
@@ -442,7 +435,7 @@ Mitigation:
 - background worker
 - options page
 - storage model
-- sidebar window creation
+- native sidePanel page
 
 ### Milestone 3: Interaction Layer
 - context menu
@@ -467,9 +460,9 @@ To be verified during implementation:
 - exact current DeepSeek web domain and chat URL
 - exact ChatGPT web route to prefer
 - exact Gemini route and availability under current browser profile
-- whether one popup window with multiple tabs or one provider tab at a time gives better UX
+- sidePanel user-gesture constraints across browsers
 
 Current recommendation:
-- use one pseudo-sidebar window
-- keep one active provider tab at a time for MVP
-- optionally expand to one tab per provider later
+- use one native sidePanel
+- keep one active provider iframe at a time for MVP
+- optionally expand provider state caching later

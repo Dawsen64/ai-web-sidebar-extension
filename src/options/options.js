@@ -7,14 +7,9 @@ const state = {
 
 const elements = {
   defaultProvider: document.querySelector("#defaultProvider"),
-  sidebarImplementation: document.querySelector("#sidebarImplementation"),
-  sidebarSide: document.querySelector("#sidebarSide"),
-  sidebarWidth: document.querySelector("#sidebarWidth"),
   defaultSendMode: document.querySelector("#defaultSendMode"),
   quickMenuEnabled: document.querySelector("#quickMenuEnabled"),
   showSelectionToolbar: document.querySelector("#showSelectionToolbar"),
-  refocusSidebarWithOwner: document.querySelector("#refocusSidebarWithOwner"),
-  closeSidebarWithOwner: document.querySelector("#closeSidebarWithOwner"),
   providerDeepSeek: document.querySelector("#provider_deepseek"),
   providerChatGPT: document.querySelector("#provider_chatgpt"),
   providerGemini: document.querySelector("#provider_gemini"),
@@ -54,14 +49,9 @@ function populateProviderOptions() {
 
 function renderSettings() {
   elements.defaultProvider.value = state.settings.defaultProvider;
-  elements.sidebarImplementation.value = state.settings.sidebarImplementation;
-  elements.sidebarSide.value = state.settings.sidebarSide;
-  elements.sidebarWidth.value = String(state.settings.sidebarWidth);
   elements.defaultSendMode.value = state.settings.defaultSendMode;
   elements.quickMenuEnabled.checked = Boolean(state.settings.quickMenuEnabled);
   elements.showSelectionToolbar.checked = Boolean(state.settings.showSelectionToolbar);
-  elements.refocusSidebarWithOwner.checked = Boolean(state.settings.refocusSidebarWithOwner);
-  elements.closeSidebarWithOwner.checked = Boolean(state.settings.closeSidebarWithOwner);
   elements.providerDeepSeek.checked = state.settings.enabledProviders.includes("deepseek");
   elements.providerChatGPT.checked = state.settings.enabledProviders.includes("chatgpt");
   elements.providerGemini.checked = state.settings.enabledProviders.includes("gemini");
@@ -147,14 +137,9 @@ async function handleSave() {
 
   state.settings = {
     defaultProvider: elements.defaultProvider.value,
-    sidebarImplementation: elements.sidebarImplementation.value,
-    sidebarSide: elements.sidebarSide.value,
-    sidebarWidth: Number(elements.sidebarWidth.value || DEFAULT_SETTINGS.sidebarWidth),
     defaultSendMode: elements.defaultSendMode.value,
     quickMenuEnabled: elements.quickMenuEnabled.checked,
     showSelectionToolbar: elements.showSelectionToolbar.checked,
-    refocusSidebarWithOwner: elements.refocusSidebarWithOwner.checked,
-    closeSidebarWithOwner: elements.closeSidebarWithOwner.checked,
     enabledProviders
   };
 

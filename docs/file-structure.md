@@ -100,13 +100,13 @@ Responsibilities:
 - validate payloads
 - route actions to dispatcher or storage services
 
-### `src/background/sidebar-window.ts`
+### `src/background/sidepanel-dispatch.ts`
 
 Responsibilities:
-- create the pseudo-sidebar popup window
-- compute size and position
-- focus existing sidebar if already open
-- navigate sidebar to target provider page
+- open native sidePanel
+- write sidePanel commands
+- wait for sidePanel acknowledgement
+- navigate sidePanel to target provider page
 
 ### `src/background/dispatch.ts`
 
@@ -215,17 +215,17 @@ Responsibilities:
 - delete template
 - reorder template display
 
-### `src/sidebar/index.html`
-### `src/sidebar/main.ts`
+### `src/sidepanel/sidepanel.html`
+### `src/sidepanel/sidepanel.js`
 
-Extension-owned page inside the pseudo-sidebar window.
+Extension-owned page inside the browser native sidePanel.
 
 Responsibilities:
-- show lightweight controls before provider navigation
-- show fallback status or manual instructions
-- expose quick provider switching if retained
+- host the current provider iframe
+- show sidePanel status or manual instructions
+- expose provider switching and injection state
 
-### `src/sidebar/provider-switcher.ts`
+### `src/content/provider-bridge.js`
 
 Responsibilities:
 - switch target provider
