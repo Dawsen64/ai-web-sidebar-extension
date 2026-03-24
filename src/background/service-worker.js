@@ -3,6 +3,11 @@ import { ensureDefaults, getRuntimeState, getSettings, getTemplates, saveRuntime
 import { renderTemplate } from "../shared/defaults.js";
 
 const WINDOW_JOIN_OVERLAP = 10;
+const SIDEPANEL_SUPPORTED_PROVIDERS = new Set(["deepseek", "chatgpt", "gemini"]);
+const SIDEPANEL_COMMAND_KEY = "sidepanel_command";
+const SIDEPANEL_ACK_KEY = "sidepanel_ack";
+const SIDEPANEL_ACTIVE_PROVIDER_KEY = "sidepanel_active_provider";
+const SIDEPANEL_READY_KEY = "sidepanel_ready";
 
 chrome.runtime.onInstalled.addListener(async () => {
   await ensureDefaults();
@@ -17,7 +22,10 @@ chrome.runtime.onStartup.addListener(async () => {
 chrome.action.onClicked.addListener(async () => {
   const settings = await getSettings();
   const currentWindow = await chrome.windows.getCurrent();
-  await openOrFocusSidebar(settings.defaultProvider, currentWindow.id);
+  const providerId = settings.sidebarImplementation === "native_sidepanel"
+    ? await resolveDefaultActionProvider(settings)
+    : settings.defaultProvider;
+  await openSidebarForProvider(providerId, currentWindow.id);
 });
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
@@ -59,7 +67,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message?.type === "OPEN_SIDEBAR") {
-    openOrFocusSidebar(message.providerId, sender.tab?.windowId)
+    openSidebarForProvider(message.providerId, sender.tab?.windowId)
+      .then(() => sendResponse({ ok: true }))
+      .catch((error) => sendResponse({ ok: false, error: error.message }));
+    return true;
+  }
+
+  if (message?.type === "SET_ACTIVE_PROVIDER") {
+    setActiveProvider(message.providerId)
       .then(() => sendResponse({ ok: true }))
       .catch((error) => sendResponse({ ok: false, error: error.message }));
     return true;
@@ -204,7 +219,8 @@ async function dispatchTemplateAction(payload) {
     return { ok: false, error: "没有找到对应的模板。" };
   }
 
-  const providerId = template.provider === "inherit_default" ? settings.defaultProvider : template.provider;
+  const useSidePanelActiveProvider = settings.sidebarImplementation === "native_sidepanel" && template.provider === "inherit_default";
+  const providerId = useSidePanelActiveProvider ? settings.defaultProvider : await resolveTargetProvider(template, settings);
   if (!settings.enabledProviders.includes(providerId)) {
     return { ok: false, error: "这个模板绑定的 AI 目前未启用。" };
   }
@@ -214,14 +230,58 @@ async function dispatchTemplateAction(payload) {
     providerId,
     prompt,
     sendMode,
-    ownerWindowId: payload.ownerWindowId
+    ownerWindowId: payload.ownerWindowId,
+    useSidePanelActiveProvider
   });
 
   return { ok: true, result };
 }
 
-async function sendPromptToProvider({ providerId, prompt, sendMode, ownerWindowId }) {
+async function resolveTargetProvider(template, settings) {
+  if (template.provider !== "inherit_default") {
+    return template.provider;
+  }
+
+  if (settings.sidebarImplementation === "native_sidepanel") {
+    const data = await chrome.storage.local.get(SIDEPANEL_ACTIVE_PROVIDER_KEY);
+    const activeProvider = data[SIDEPANEL_ACTIVE_PROVIDER_KEY];
+    if (activeProvider && SIDEPANEL_SUPPORTED_PROVIDERS.has(activeProvider)) {
+      return activeProvider;
+    }
+  }
+
+  return settings.defaultProvider;
+}
+
+async function resolveDefaultActionProvider(settings) {
+  const data = await chrome.storage.local.get(SIDEPANEL_ACTIVE_PROVIDER_KEY);
+  const activeProvider = data[SIDEPANEL_ACTIVE_PROVIDER_KEY];
+  if (activeProvider && SIDEPANEL_SUPPORTED_PROVIDERS.has(activeProvider)) {
+    return activeProvider;
+  }
+  return settings.defaultProvider;
+}
+
+async function setActiveProvider(providerId) {
+  if (!SIDEPANEL_SUPPORTED_PROVIDERS.has(providerId)) {
+    return;
+  }
+
+  await chrome.storage.local.set({ [SIDEPANEL_ACTIVE_PROVIDER_KEY]: providerId });
+
   const settings = await getSettings();
+  await saveSettings({
+    ...settings,
+    defaultProvider: providerId
+  });
+}
+
+async function sendPromptToProvider({ providerId, prompt, sendMode, ownerWindowId, useSidePanelActiveProvider = false }) {
+  const settings = await getSettings();
+  if ((useSidePanelActiveProvider || shouldUseNativeSidePanel(settings, providerId)) && ownerWindowId) {
+    return sendPromptToNativeSidePanel({ providerId, prompt, sendMode, ownerWindowId, useSidePanelActiveProvider });
+  }
+
   const runtime = await getRuntimeState();
   const windowId = await openOrFocusSidebar(providerId, ownerWindowId ?? runtime.ownerWindowId);
   let tab = await findProviderTab(providerId, windowId);
@@ -261,6 +321,88 @@ async function sendPromptToProvider({ providerId, prompt, sendMode, ownerWindowI
     sidebarSide: settings.sidebarSide
   });
   return result;
+}
+
+async function openSidebarForProvider(providerId, ownerWindowId) {
+  const settings = await getSettings();
+  if (shouldUseNativeSidePanel(settings, providerId) && ownerWindowId) {
+    chrome.sidePanel.open({ windowId: ownerWindowId }).catch((error) => {
+      console.warn("[AI Sidebar][SW] 打开原生 sidePanel 失败", error);
+    });
+    await postSidePanelCommand({
+      kind: "switch_provider",
+      providerId
+    });
+    return { mode: "native_sidepanel" };
+  }
+
+  const windowId = await openOrFocusSidebar(providerId, ownerWindowId);
+  return { mode: "popup", windowId };
+}
+
+function shouldUseNativeSidePanel(settings, providerId) {
+  return settings.sidebarImplementation === "native_sidepanel" && SIDEPANEL_SUPPORTED_PROVIDERS.has(providerId);
+}
+
+async function sendPromptToNativeSidePanel({ providerId, prompt, sendMode, ownerWindowId, useSidePanelActiveProvider = false }) {
+  console.log("[AI Sidebar][SW] 尝试使用原生 sidePanel", { providerId, sendMode, ownerWindowId, useSidePanelActiveProvider });
+  const readyData = await chrome.storage.local.get(SIDEPANEL_READY_KEY);
+  if (!readyData[SIDEPANEL_READY_KEY]) {
+    return {
+      ok: false,
+      mode: "fallback",
+      message: "原生 sidePanel 尚未打开，请先点击扩展图标打开 sidePanel。"
+    };
+  }
+  try {
+    const response = await postSidePanelCommandAndWaitForAck({
+      kind: "inject_prompt",
+      providerId,
+      prompt,
+      sendMode,
+      useSidePanelActiveProvider
+    });
+    console.log("[AI Sidebar][SW] sidePanel 注入响应", response);
+    return response?.result ?? {
+      ok: true,
+      mode: sendMode,
+      message: "已发送到原生 sidePanel 实验版。"
+    };
+  } catch (error) {
+    console.warn("原生 sidePanel 注入失败。", error);
+    return {
+      ok: false,
+      mode: "fallback",
+      message: `原生 sidePanel 注入失败：${error.message}`
+    };
+  }
+}
+
+async function postSidePanelCommand(command) {
+  const payload = {
+    ...command,
+    requestId: `${Date.now()}_${Math.random().toString(16).slice(2)}`,
+    timestamp: Date.now()
+  };
+  console.log("[AI Sidebar][SW] 写入 sidePanel 命令", payload);
+  await chrome.storage.local.set({ [SIDEPANEL_COMMAND_KEY]: payload });
+  return payload;
+}
+
+async function postSidePanelCommandAndWaitForAck(command, timeoutMs = 8000) {
+  const payload = await postSidePanelCommand(command);
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt < timeoutMs) {
+    const data = await chrome.storage.local.get(SIDEPANEL_ACK_KEY);
+    const ack = data[SIDEPANEL_ACK_KEY];
+    if (ack?.requestId === payload.requestId) {
+      return ack;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 120));
+  }
+
+  throw new Error("等待 sidePanel 响应超时。");
 }
 
 async function openOrFocusSidebar(providerId, ownerWindowId) {

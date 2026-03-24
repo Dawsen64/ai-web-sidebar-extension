@@ -4,8 +4,11 @@
   "version": "0.1.0",
   "description": "在独立侧边栏窗口中使用 DeepSeek、ChatGPT 和 Gemini 官网对话，支持划词模板和一键发送。",
   "permissions": [
+    "sidePanel",
     "storage",
     "contextMenus",
+    "declarativeNetRequest",
+    "declarativeNetRequestWithHostAccess",
     "scripting",
     "tabs",
     "windows",
@@ -24,6 +27,9 @@
     "service_worker": "src/background/service-worker.js",
     "type": "module"
   },
+  "side_panel": {
+    "default_path": "src/sidepanel/sidepanel.html"
+  },
   "action": {
     "default_title": "打开 AI 官网侧边栏助手"
   },
@@ -38,6 +44,29 @@
         "src/content/content-script.js"
       ],
       "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://chat.deepseek.com/*",
+        "https://www.deepseek.com/*",
+        "https://chatgpt.com/*",
+        "https://chat.openai.com/*",
+        "https://gemini.google.com/*"
+      ],
+      "js": [
+        "src/content/provider-bridge.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": true
     }
-  ]
+  ],
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "sidepanel_iframe_rules",
+        "enabled": true,
+        "path": "src/rules/sidepanel-iframe-rules.json"
+      }
+    ]
+  }
 }

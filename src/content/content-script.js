@@ -16,10 +16,13 @@ async function handleSelectionChange() {
   const selection = window.getSelection();
   const text = selection?.toString().trim();
 
-  if (!text || isSelectionInsideEditable(selection)) {
+  if (!text || selection?.rangeCount === 0 || isSelectionInsideEditable(selection)) {
     hideToolbar();
     return;
   }
+
+  const range = selection.getRangeAt(0);
+  const rect = range.getBoundingClientRect();
 
   const response = await chrome.runtime.sendMessage({ type: "GET_QUICK_ACTIONS" });
   if (!response?.ok || !response.templates?.length) {
@@ -32,7 +35,7 @@ async function handleSelectionChange() {
     pageUrl: location.href,
     pageTitle: document.title
   };
-  renderToolbar(response.templates, selection.getRangeAt(0).getBoundingClientRect());
+  renderToolbar(response.templates, rect);
 }
 
 function renderToolbar(templates, rect) {

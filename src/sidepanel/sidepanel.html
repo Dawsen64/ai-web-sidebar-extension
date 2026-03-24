@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 官网侧边栏助手 - sidePanel 实验版</title>
+    <link rel="stylesheet" href="./sidepanel.css">
+  </head>
+  <body>
+    <div class="shell">
+      <header class="header">
+        <div>
+          <p class="eyebrow">实验版</p>
+          <h1>原生 sidePanel</h1>
+        </div>
+        <select id="providerSelect">
+          <option value="deepseek">DeepSeek</option>
+          <option value="chatgpt">ChatGPT</option>
+          <option value="gemini">Gemini</option>
+        </select>
+      </header>
+
+      <p class="tip">当前实验版支持 DeepSeek、ChatGPT、Gemini。若注入失败，请先确认已在对应官网登录。</p>
+      <div class="status-bar">
+        <span id="statusBadge" class="status-badge status-idle">未连接</span>
+        <span id="statusText" class="status-text">等待 DeepSeek 页面就绪。</span>
+      </div>
+
+      <div class="frame-wrap">
+        <iframe
+          id="providerFrame"
+          title="DeepSeek"
+          src="https://chat.deepseek.com/"
+          sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"
+          allow="clipboard-read; clipboard-write"
+        ></iframe>
+      </div>
+    </div>
+    <script type="module" src="./sidepanel.js"></script>
+  </body>
+  </html>

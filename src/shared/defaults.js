@@ -19,6 +19,7 @@ export const PROVIDERS = {
 export const DEFAULT_SETTINGS = {
   defaultProvider: "deepseek",
   enabledProviders: ["deepseek", "chatgpt", "gemini"],
+  sidebarImplementation: "popup",
   sidebarSide: "right",
   sidebarWidth: 460,
   quickMenuEnabled: true,

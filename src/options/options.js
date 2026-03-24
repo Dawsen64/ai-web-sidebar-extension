@@ -7,6 +7,7 @@ const state = {
 
 const elements = {
   defaultProvider: document.querySelector("#defaultProvider"),
+  sidebarImplementation: document.querySelector("#sidebarImplementation"),
   sidebarSide: document.querySelector("#sidebarSide"),
   sidebarWidth: document.querySelector("#sidebarWidth"),
   defaultSendMode: document.querySelector("#defaultSendMode"),
@@ -25,6 +26,7 @@ const elements = {
 };
 
 bootstrap();
+chrome.storage.onChanged.addListener(handleStorageChange);
 
 async function bootstrap() {
   populateProviderOptions();
@@ -52,6 +54,7 @@ function populateProviderOptions() {
 
 function renderSettings() {
   elements.defaultProvider.value = state.settings.defaultProvider;
+  elements.sidebarImplementation.value = state.settings.sidebarImplementation;
   elements.sidebarSide.value = state.settings.sidebarSide;
   elements.sidebarWidth.value = String(state.settings.sidebarWidth);
   elements.defaultSendMode.value = state.settings.defaultSendMode;
@@ -144,6 +147,7 @@ async function handleSave() {
 
   state.settings = {
     defaultProvider: elements.defaultProvider.value,
+    sidebarImplementation: elements.sidebarImplementation.value,
     sidebarSide: elements.sidebarSide.value,
     sidebarWidth: Number(elements.sidebarWidth.value || DEFAULT_SETTINGS.sidebarWidth),
     defaultSendMode: elements.defaultSendMode.value,
@@ -215,4 +219,16 @@ function showStatus(message, isError = false) {
   showStatus.timer = window.setTimeout(() => {
     elements.status.hidden = true;
   }, 2600);
+}
+
+function handleStorageChange(changes, areaName) {
+  if (areaName !== "sync" || !changes.settings?.newValue) {
+    return;
+  }
+
+  state.settings = {
+    ...DEFAULT_SETTINGS,
+    ...changes.settings.newValue
+  };
+  renderSettings();
 }
