@@ -13,12 +13,17 @@ export const PROVIDERS = {
     id: "gemini",
     label: "Gemini",
     url: "https://gemini.google.com/app"
+  },
+  doubao: {
+    id: "doubao",
+    label: "豆包",
+    url: "https://www.doubao.com/chat/"
   }
 };
 
 export const DEFAULT_SETTINGS = {
   defaultProvider: "deepseek",
-  enabledProviders: ["deepseek", "chatgpt", "gemini"],
+  enabledProviders: ["deepseek", "chatgpt", "gemini", "doubao"],
   quickMenuEnabled: true,
   defaultSendMode: "auto_send",
   showSelectionToolbar: true

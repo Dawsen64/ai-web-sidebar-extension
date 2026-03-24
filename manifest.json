@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "AI 官网侧边栏助手",
   "version": "0.1.0",
-  "description": "在浏览器原生侧边栏中使用 DeepSeek、ChatGPT 和 Gemini 官网对话，支持划词模板和一键发送。",
+  "description": "在浏览器原生侧边栏中使用 DeepSeek、ChatGPT、Gemini 和豆包官网对话，支持划词模板和一键发送。",
   "permissions": [
     "sidePanel",
     "storage",
@@ -18,6 +18,7 @@
     "https://chatgpt.com/*",
     "https://chat.openai.com/*",
     "https://gemini.google.com/*",
+    "https://www.doubao.com/*",
     "https://*/*",
     "http://*/*"
   ],
@@ -49,7 +50,8 @@
         "https://www.deepseek.com/*",
         "https://chatgpt.com/*",
         "https://chat.openai.com/*",
-        "https://gemini.google.com/*"
+        "https://gemini.google.com/*",
+        "https://www.doubao.com/*"
       ],
       "js": [
         "src/content/provider-bridge.js"

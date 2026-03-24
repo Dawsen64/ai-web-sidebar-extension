@@ -10,12 +10,14 @@ const SWITCHER_POSITION_KEY = "sidepanel_switcher_position";
 const PROVIDER_URLS = {
   deepseek: "https://chat.deepseek.com/",
   chatgpt: "https://chatgpt.com/",
-  gemini: "https://gemini.google.com/app"
+  gemini: "https://gemini.google.com/app",
+  doubao: "https://www.doubao.com/chat/"
 };
 const PROVIDER_LABELS = {
   deepseek: "DeepSeek",
   chatgpt: "ChatGPT",
-  gemini: "Gemini"
+  gemini: "Gemini",
+  doubao: "豆包"
 };
 
 let currentProvider = "deepseek";

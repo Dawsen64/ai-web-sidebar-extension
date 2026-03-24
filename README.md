@@ -2,7 +2,7 @@
 
 一个基于 Chrome / Edge Manifest V3 的浏览器扩展。
 
-它通过浏览器原生 `sidePanel` 打开 `DeepSeek`、`ChatGPT`、`Gemini` 官网聊天页面，并支持网页划词、右键菜单、悬浮快捷菜单、自定义模板、自动填入与自动发送。
+它通过浏览器原生 `sidePanel` 打开 `DeepSeek`、`ChatGPT`、`Gemini`、`豆包` 官网聊天页面，并支持网页划词、右键菜单、悬浮快捷菜单、自定义模板、自动填入与自动发送。
 
 这个项目适合这样一类需求：
 - 希望直接使用 AI 官网网页
@@ -16,7 +16,7 @@
 - 设置页
 - 网页划词后的悬浮快捷菜单
 - 浏览器原生 sidePanel 效果
-- DeepSeek / ChatGPT / Gemini 实际使用界面
+- DeepSeek / ChatGPT / Gemini / 豆包 实际使用界面
 
 ## 当前状态
 
@@ -28,7 +28,7 @@
 
 ## 功能特性
 
-- 支持 `DeepSeek`、`ChatGPT`、`Gemini`
+- 支持 `DeepSeek`、`ChatGPT`、`Gemini`、`豆包`
 - 支持网页划词后通过悬浮快捷菜单发送到 AI
 - 支持右键菜单快速调用模板
 - 支持自定义模板
@@ -47,6 +47,7 @@
 - DeepSeek
 - ChatGPT
 - Gemini
+- 豆包
 
 ## 设计说明
 
@@ -73,7 +74,7 @@
 负责模板管理、默认 AI 和发送方式配置。
 
 4. sidePanel 与 AI 站点适配层
-负责 sidePanel iframe、bridge 通信，以及 DeepSeek / ChatGPT / Gemini 官网页面中的输入框和发送按钮适配。
+负责 sidePanel iframe、bridge 通信，以及 DeepSeek / ChatGPT / Gemini / 豆包 官网页面中的输入框和发送按钮适配。
 sidePanel 内还提供了一个可拖动的悬浮站点切换器。
 
 ## 项目结构
@@ -178,7 +179,7 @@ ai-web-sidebar-extension/
 
 - 由于依赖官网页面结构，官网 DOM 改版后，自动填入或自动发送可能需要重新适配
 - `chrome.sidePanel.open()` 受浏览器用户手势限制，模板触发时如果 sidePanel 尚未打开，需要先手动打开
-- DeepSeek、ChatGPT、Gemini 都可能因官网改版而需要重新适配
+- DeepSeek、ChatGPT、Gemini、豆包 都可能因官网改版而需要重新适配
 
 ## 安全与隐私
 

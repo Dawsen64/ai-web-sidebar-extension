@@ -207,6 +207,28 @@
         ]
       };
     }
+    if (hostname.includes("doubao.com")) {
+      return {
+        id: "doubao",
+        label: "豆包",
+        inputs: [
+          "textarea",
+          "[contenteditable='true']",
+          "div[role='textbox']",
+          "div.ProseMirror",
+          ".semi-input-textarea",
+          ".semi-input textarea"
+        ],
+        sendButtons: [
+          "button[aria-label*='发送']",
+          "button[aria-label*='Send']",
+          "button[type='submit']",
+          "button[data-testid*='send']",
+          ".send-btn",
+          ".semi-button"
+        ]
+      };
+    }
     return null;
   }
 })();

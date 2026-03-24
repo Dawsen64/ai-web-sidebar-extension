@@ -13,6 +13,7 @@ const elements = {
   providerDeepSeek: document.querySelector("#provider_deepseek"),
   providerChatGPT: document.querySelector("#provider_chatgpt"),
   providerGemini: document.querySelector("#provider_gemini"),
+  providerDoubao: document.querySelector("#provider_doubao"),
   templateList: document.querySelector("#templateList"),
   addTemplateButton: document.querySelector("#addTemplateButton"),
   saveButton: document.querySelector("#saveButton"),
@@ -55,6 +56,7 @@ function renderSettings() {
   elements.providerDeepSeek.checked = state.settings.enabledProviders.includes("deepseek");
   elements.providerChatGPT.checked = state.settings.enabledProviders.includes("chatgpt");
   elements.providerGemini.checked = state.settings.enabledProviders.includes("gemini");
+  elements.providerDoubao.checked = state.settings.enabledProviders.includes("doubao");
 }
 
 function renderTemplates() {
@@ -125,7 +127,8 @@ async function handleSave() {
   const enabledProviders = [
     elements.providerDeepSeek.checked ? "deepseek" : null,
     elements.providerChatGPT.checked ? "chatgpt" : null,
-    elements.providerGemini.checked ? "gemini" : null
+    elements.providerGemini.checked ? "gemini" : null,
+    elements.providerDoubao.checked ? "doubao" : null
   ].filter(Boolean);
 
   if (enabledProviders.length === 0) {

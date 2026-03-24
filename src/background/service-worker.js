@@ -1,7 +1,7 @@
 import { ensureDefaults, getSettings, getTemplates, saveSettings, saveTemplates } from "./storage.js";
 import { renderTemplate } from "../shared/defaults.js";
 
-const SIDEPANEL_SUPPORTED_PROVIDERS = new Set(["deepseek", "chatgpt", "gemini"]);
+const SIDEPANEL_SUPPORTED_PROVIDERS = new Set(["deepseek", "chatgpt", "gemini", "doubao"]);
 const SIDEPANEL_COMMAND_KEY = "sidepanel_command";
 const SIDEPANEL_ACK_KEY = "sidepanel_ack";
 const SIDEPANEL_ACTIVE_PROVIDER_KEY = "sidepanel_active_provider";
@@ -152,7 +152,7 @@ async function dispatchTemplateAction(payload) {
   }
 
   const useSidePanelActiveProvider = template.provider === "inherit_default";
-  const providerId = useSidePanelActiveProvider ? settings.defaultProvider : await resolveTargetProvider(template);
+  const providerId = useSidePanelActiveProvider ? settings.defaultProvider : await resolveTargetProvider(template, settings);
   if (!settings.enabledProviders.includes(providerId)) {
     return { ok: false, error: "这个模板绑定的 AI 目前未启用。" };
   }
@@ -169,7 +169,7 @@ async function dispatchTemplateAction(payload) {
   return { ok: true, result };
 }
 
-async function resolveTargetProvider(template) {
+async function resolveTargetProvider(template, settings) {
   if (template.provider !== "inherit_default") {
     return template.provider;
   }
